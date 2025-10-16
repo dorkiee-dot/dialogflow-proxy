@@ -1,0 +1,48 @@
+const {GoogleAuth} = require('google-auth-library');
+const fetch = require('node-fetch');
+
+module.exports = async (req, res) => {
+  try {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+
+    const { text, sessionId } = req.body || {};
+    if (!text) return res.status(400).json({ error: 'Missing text' });
+
+    const PROJECT_ID = process.env.PROJECT_ID;
+    const session = sessionId || `adalo-${Date.now()}`;
+
+    const client = new GoogleAuth({
+      credentials: JSON.parse(process.env.SERVICE_ACCOUNT_JSON),
+      scopes: ['https://www.googleapis.com/auth/dialogflow']
+    });
+
+    const tokenResponse = await client.getAccessToken();
+    const token = tokenResponse.token || tokenResponse;
+
+    const url = `https://dialogflow.googleapis.com/v2/projects/${PROJECT_ID}/agent/sessions/${session}:detectIntent`;
+
+    const body = {
+      queryInput: {
+        text: {
+          text: text,
+          languageCode: 'en'
+        }
+      }
+    };
+
+    const dfResp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const dfJson = await dfResp.json();
+    res.status(dfResp.status).json(dfJson);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || err.toString() });
+  }
+};

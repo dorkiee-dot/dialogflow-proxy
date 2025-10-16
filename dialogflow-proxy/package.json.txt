@@ -1,0 +1,8 @@
+{
+  "name": "dialogflow-proxy",
+  "version": "1.0.0",
+  "dependencies": {
+    "google-auth-library": "^8.7.0",
+    "node-fetch": "^2.6.7"
+  }
+}

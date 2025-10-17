@@ -1,27 +1,47 @@
-const {GoogleAuth} = require('google-auth-library');
-const fetch = require('node-fetch');
+import { GoogleAuth } from 'google-auth-library';
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
+  // ✅ Allow CORS (needed for Adalo)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  // Handle preflight (OPTIONS) request
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed. Use POST.' });
+  }
+
   try {
-    if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+    const { sessionId, queryInput, text } = req.body || {};
+    // Allow either queryInput object or simple text input
+    if (!sessionId || (!queryInput && !text)) {
+      return res.status(400).json({ error: 'Missing sessionId and either queryInput or text.' });
+    }
 
-    const { text, sessionId } = req.body || {};
-    if (!text) return res.status(400).json({ error: 'Missing text' });
+    const jsonKey = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.SERVICE_ACCOUNT_JSON;
+    if (!jsonKey) {
+      return res.status(500).json({ error: 'Missing Google service account JSON.' });
+    }
 
-    const PROJECT_ID = process.env.PROJECT_ID;
-    const session = sessionId || `adalo-${Date.now()}`;
-
-    const client = new GoogleAuth({
-      credentials: JSON.parse(process.env.SERVICE_ACCOUNT_JSON),
-      scopes: ['https://www.googleapis.com/auth/dialogflow']
+    const credentials = typeof jsonKey === 'string' ? JSON.parse(jsonKey) : jsonKey;
+    const auth = new GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
     });
 
-    const tokenResponse = await client.getAccessToken();
-    const token = tokenResponse.token || tokenResponse;
+    const client = await auth.getClient();
+    const at = await client.getAccessToken();
+    const accessToken = at?.token || at;
 
-    const url = `https://dialogflow.googleapis.com/v2/projects/${PROJECT_ID}/agent/sessions/${session}:detectIntent`;
+    const projectId = credentials.project_id;
+    const url = `https://dialogflow.googleapis.com/v2/projects/${projectId}/agent/sessions/${encodeURIComponent(sessionId)}:detectIntent`;
 
-    const body = {
+    // Support both direct queryInput object and simple text input
+    const body = queryInput || {
       queryInput: {
         text: {
           text: text,
@@ -30,20 +50,19 @@ module.exports = async (req, res) => {
       }
     };
 
-    const dfResp = await fetch(url, {
+    const dialogflowResponse = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
     });
 
-    const dfJson = await dfResp.json();
-    res.status(dfResp.status).json(dfJson);
+    const data = await dialogflowResponse.json();
+    return res.status(dialogflowResponse.status || 200).json(data);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message || err.toString() });
+    console.error('Dialogflow proxy error:', err);
+    return res.status(500).json({ error: err.message || 'Unknown error' });
   }
-};
-
+}

@@ -1,8 +1,14 @@
+npm init -y
+
 {
   "name": "dialogflow-proxy",
   "version": "1.0.0",
+  "main": "api/dialogflowProxy.js",
+  "scripts": {
+    "start": "node api/dialogflowProxy.js"
+  },
   "dependencies": {
-    "google-auth-library": "^8.7.0",
+    "google-auth-library": "^9.0.0",
     "node-fetch": "^2.6.7"
   }
 }

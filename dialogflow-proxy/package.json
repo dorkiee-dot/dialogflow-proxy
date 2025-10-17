@@ -1,5 +1,3 @@
-npm init -y
-
 {
   "name": "dialogflow-proxy",
   "version": "1.0.0",
@@ -12,3 +10,4 @@ npm init -y
     "node-fetch": "^2.6.7"
   }
 }
+
